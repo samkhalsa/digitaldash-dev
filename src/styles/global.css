@@ -71,6 +71,88 @@ a.wordmark {
   flex: none;
 }
 
+.song-toggle {
+  font: inherit;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--underline-color-soft);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+  transition: color 160ms ease, text-decoration-color 160ms ease;
+}
+
+.song-toggle:hover,
+.song-toggle:focus-visible {
+  color: var(--color-accent);
+  text-decoration-color: var(--underline-color-hover);
+}
+
+/* the song, in the corner */
+
+.song {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  width: 300px;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--underline-color-soft);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.08);
+  animation: song-in 240ms ease-out;
+}
+
+.song-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.song-close {
+  font: inherit;
+  font-size: 1.2em;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0 0.2em;
+  cursor: pointer;
+}
+
+.song-close:hover {
+  color: var(--color-accent);
+}
+
+.song iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 4px;
+}
+
+@keyframes song-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* story */
 
 .story {

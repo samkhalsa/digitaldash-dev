@@ -4,6 +4,7 @@ import { Footer } from "./components/Footer";
 import { ProgressBar } from "./components/ProgressBar";
 import { Manifesto } from "./pages/Manifesto";
 import { DitherBackground } from "./components/DitherBackground";
+import { SongPlayer } from "./components/SongPlayer";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         </Routes>
         <Footer />
       </div>
+      <SongPlayer />
     </>
   );
 }
