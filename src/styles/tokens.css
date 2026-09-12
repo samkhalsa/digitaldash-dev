@@ -1,0 +1,49 @@
+/* design tokens. light is the default, dark follows the reader's system. */
+
+:root {
+  color-scheme: light dark;
+
+  --header-font-family: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --body-font-family: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --color-bg: #f7f5f0;
+  --color-text: #1c1b19;
+  --color-muted: #6b675f;
+  --color-accent: #c2410c;
+
+  --underline-color: #1c1b1966;
+  --underline-color-hover: #1c1b19b3;
+  --underline-color-soft: #1c1b1940;
+
+  --column-width: 36em;
+  --column-padding: 1.25rem;
+
+  --font-size-body: 19px;
+  --font-size-small: 15px;
+  --font-size-title: 1.15rem;
+  --line-height-body: 1.55;
+  --paragraph-gap: 1.4em;
+  --section-gap: 4.5rem;
+  --top-space: 30vh;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --font-size-body: 17px;
+    --section-gap: 3.5rem;
+    --top-space: 22vh;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #111111;
+    --color-text: #ece9e2;
+    --color-muted: #8f8a80;
+    --color-accent: #e8794a;
+
+    --underline-color: #ffffff73;
+    --underline-color-hover: #ffffffd9;
+    --underline-color-soft: #ffffff4d;
+  }
+}

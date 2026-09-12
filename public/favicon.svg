@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    text { font-family: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 500; font-size: 34px; letter-spacing: -1.5px; }
+    .bg { fill: #f7f5f0; }
+    .fg { fill: #1c1b19; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #111111; }
+      .fg { fill: #ece9e2; }
+    }
+  </style>
+  <rect class="bg" width="64" height="64" rx="14" />
+  <text class="fg" x="32" y="44" text-anchor="middle">dd</text>
+</svg>
