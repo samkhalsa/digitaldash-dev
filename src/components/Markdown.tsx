@@ -15,12 +15,16 @@ function Anchor({ href = "", children, ...rest }: ComponentPropsWithoutRef<"a">)
   );
 }
 
+function Img({ alt = "", ...rest }: ComponentPropsWithoutRef<"img">) {
+  return <img alt={alt} loading="lazy" decoding="async" {...rest} />;
+}
+
 type Props = { children: string };
 
 /** renders a markdown string with the site's typography. */
 export function Markdown({ children }: Props) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: Anchor }}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: Anchor, img: Img }}>
       {children}
     </ReactMarkdown>
   );

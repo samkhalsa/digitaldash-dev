@@ -3,10 +3,12 @@ import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { ProgressBar } from "./components/ProgressBar";
 import { Manifesto } from "./pages/Manifesto";
+import { DitherBackground } from "./components/DitherBackground";
 
 export default function App() {
   return (
     <>
+      <DitherBackground />
       <ProgressBar />
       <div className="page">
         <Header />

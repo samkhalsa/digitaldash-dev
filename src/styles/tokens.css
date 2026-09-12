@@ -9,7 +9,7 @@
   --color-bg: #f7f5f0;
   --color-text: #1c1b19;
   --color-muted: #6b675f;
-  --color-accent: #c2410c;
+  --color-accent: #3a3faf; /* digital dash blue, sampled from the logo */
 
   --underline-color: #1c1b1966;
   --underline-color-hover: #1c1b19b3;
@@ -40,7 +40,7 @@
     --color-bg: #111111;
     --color-text: #ece9e2;
     --color-muted: #8f8a80;
-    --color-accent: #e8794a;
+    --color-accent: #7c80e6; /* lighter blue for dark backgrounds */
 
     --underline-color: #ffffff73;
     --underline-color-hover: #ffffffd9;

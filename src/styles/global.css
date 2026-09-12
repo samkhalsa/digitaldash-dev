@@ -27,6 +27,7 @@ body {
 /* the column */
 
 .page {
+  position: relative;
   width: 100%;
   max-width: calc(var(--column-width) + var(--column-padding) * 2);
   margin: 0 auto;
@@ -55,6 +56,19 @@ body {
 
 .wordmark:hover {
   color: var(--color-text);
+}
+
+a.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
+.wordmark-logo {
+  height: 0.9em;
+  width: auto;
+  display: block;
+  flex: none;
 }
 
 /* story */
@@ -126,7 +140,35 @@ body {
   max-width: 100%;
   height: auto;
   display: block;
-  margin: 1.5em 0;
+  margin: 2.5em 0 0;
+  border-radius: 6px;
+}
+
+.section p:has(> img) {
+  margin: 0;
+}
+
+/* a single photo: full column width, never taller than the reading window */
+.section p:has(> img:only-child) img {
+  width: 100%;
+  max-height: 30rem;
+  object-fit: cover;
+}
+
+/* several photos on one line become a strip */
+.section p:has(> img + img) {
+  display: flex;
+  gap: 0.6em;
+  margin-top: 2.5em;
+}
+
+.section p:has(> img + img) img {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  height: clamp(9rem, 30vw, 19rem);
+  object-fit: cover;
+  margin: 0;
 }
 
 .section code {
@@ -171,6 +213,15 @@ a:hover {
   margin-left: auto;
 }
 
+/* dithered logo behind the page */
+
+.dither {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
 /* reading progress */
 
 .progress {
@@ -189,4 +240,11 @@ a:hover {
 ::selection {
   background: var(--color-accent);
   color: var(--color-bg);
+}
+
+/* the tee mockup sits on pure white; let it melt into the cream in light mode */
+@media (prefers-color-scheme: light) {
+  .section img[src$="thank-you-tee.jpg"] {
+    mix-blend-mode: multiply;
+  }
 }
