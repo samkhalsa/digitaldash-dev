@@ -157,7 +157,7 @@ a.wordmark {
 
 .story {
   padding-top: var(--top-space);
-  padding-bottom: var(--section-gap);
+  padding-bottom: calc(var(--section-gap) * 1.5);
 }
 
 .section {
@@ -275,26 +275,6 @@ a:hover {
   color: var(--color-accent);
 }
 
-/* footer */
-
-.footer {
-  padding: var(--section-gap) 0 3rem;
-  font-size: var(--font-size-small);
-  color: var(--color-muted);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5em 1.5em;
-  align-items: baseline;
-}
-
-.footer a {
-  color: inherit;
-}
-
-.footer .copyright {
-  margin-left: auto;
-}
-
 /* dithered logo behind the page */
 
 .dither {
@@ -322,11 +302,4 @@ a:hover {
 ::selection {
   background: var(--color-accent);
   color: var(--color-bg);
-}
-
-/* the tee mockup sits on pure white; let it melt into the cream in light mode */
-@media (prefers-color-scheme: light) {
-  .section img[src$="thank-you-tee.jpg"] {
-    mix-blend-mode: multiply;
-  }
 }

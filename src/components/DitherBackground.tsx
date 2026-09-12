@@ -1,9 +1,13 @@
 import { useEffect, useRef } from "react";
 
 /**
- * a full-viewport canvas behind the page. the logo is floyd-steinberg
- * dithered at runtime so the halftone dots are the particles: they breathe
- * while idle, and scatter into dust as the reader scrolls into the story.
+ * a full-viewport canvas behind the page.
+ *
+ * the logo is floyd-steinberg dithered at runtime so the halftone dots are
+ * the particles. as the reader scrolls, the mark scatters: most dots fade out,
+ * but a few dozen fly to slots in a layered neural network laid out across
+ * the screen. from there, connections draw in layer by layer, left to right,
+ * until the network is complete at the end of the page.
  *
  * source image: /logo.svg (any image works, dark pixels become dots).
  * respects prefers-reduced-motion: a still dither, no animation.
@@ -18,11 +22,12 @@ type Particle = {
   delay: number; // 0..1, scatter delay by position
   phase: number; // idle phase
   speed: number; // idle speed
-  arrow: boolean; // whether this dot joins the arrow at the end
-  ax: number; // arrow-space x, -0.5..0.5 (normalised by arrow width)
-  ay: number; // arrow-space y
-  gdelay: number; // 0..1, gather delay
 };
+
+/** a dot that lands in the network. */
+type Node = { i: number; x: number; y: number; layer: number; edges: number[] };
+/** a connection between two nodes; `order` is when it grows in, `w` its weight. */
+type Edge = { a: number; b: number; order: number; w: number };
 
 const LOGO_SRC = "/logo.svg";
 
@@ -44,8 +49,7 @@ function dither(img: HTMLImageElement, targetWidth: number): Particle[] {
   for (let i = 0; i < w * h; i++) {
     const j = i * 4;
     const a = src[j + 3] / 255;
-    const lum = (src[j] * 0.299 + src[j + 1] * 0.587 + src[j + 2] * 0.114) * a + 255 * (1 - a);
-    g[i] = lum;
+    g[i] = (src[j] * 0.299 + src[j + 1] * 0.587 + src[j + 2] * 0.114) * a + 255 * (1 - a);
   }
 
   // floyd-steinberg error diffusion to 1 bit
@@ -95,53 +99,7 @@ function dither(img: HTMLImageElement, targetWidth: number): Particle[] {
       delay: Math.random() * 0.35 + (sy + 0.5) * 0.35,
       phase: Math.random() * Math.PI * 2,
       speed: 0.4 + Math.random() * 0.8,
-      arrow: false,
-      ax: 0,
-      ay: 0,
-      gdelay: Math.random() * 0.35,
     });
-  }
-  return out;
-}
-
-/**
- * an arrow, pointing forward, as a cloud of at most n points. drawn to a small
- * canvas and sampled at dither density so the dust can gather into it at the
- * end of the page without packing solid.
- */
-function arrowPoints(max: number): Array<[number, number]> {
-  const w = 240;
-  const h = 130;
-  const off = document.createElement("canvas");
-  off.width = w;
-  off.height = h;
-  const c = off.getContext("2d", { willReadFrequently: true });
-  if (!c) return [];
-  c.fillStyle = "#fff";
-  c.fillRect(0, 0, w, h);
-  c.strokeStyle = "#000";
-  c.lineWidth = 22;
-  c.lineCap = "round";
-  c.lineJoin = "round";
-  c.beginPath();
-  c.moveTo(28, 65);
-  c.lineTo(206, 65);
-  c.moveTo(150, 16);
-  c.lineTo(208, 65);
-  c.lineTo(150, 114);
-  c.stroke();
-  const d = c.getImageData(0, 0, w, h).data;
-  const all: Array<[number, number]> = [];
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (d[(y * w + x) * 4] < 128) all.push([x / w - 0.5, (y - h / 2) / w]);
-    }
-  }
-  const n = Math.min(max, Math.floor(all.length / 3));
-  const out: Array<[number, number]> = [];
-  for (let i = 0; i < n; i++) {
-    const src = all[Math.floor((i * all.length) / n) % all.length];
-    out.push([src[0] + (Math.random() - 0.5) / w, src[1] + (Math.random() - 0.5) / w]);
   }
   return out;
 }
@@ -156,7 +114,6 @@ function cssColor(name: string): [number, number, number] {
 }
 
 const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 export function DitherBackground() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -173,6 +130,8 @@ export function DitherBackground() {
     const darkMedia = window.matchMedia("(prefers-color-scheme: dark)");
 
     let parts: Particle[] = [];
+    let nodes: Node[] = [];
+    let edges: Edge[] = [];
     let img: HTMLImageElement | null = null;
     let W = 0;
     let H = 0;
@@ -184,20 +143,136 @@ export function DitherBackground() {
     let pointerY = 0;
     let targetPX = 0;
     let targetPY = 0;
+    let colL = 0; // the text column, so lines behind it can be dimmed
+    let colR = 0;
+    let maxScroll = 1; // cached: reading scrollHeight every frame forces layout
+    let lastScroll = -1;
+    let needsDraw = true;
+
+    /** where the logo sits: large and centred in the first screen. */
+    function logoFrame() {
+      const small = W < 600;
+      return { S: Math.min(W, H) * (small ? 0.58 : 0.48), cx: W / 2, cy: H * 0.42 };
+    }
 
     function rebuild() {
       if (!img) return;
       const small = window.innerWidth < 600;
       parts = dither(img, small ? 150 : 230);
-      // spread the arrow's dots evenly across the field; the rest fade out
-      const arrow = arrowPoints(parts.length);
-      const step = parts.length / Math.max(1, arrow.length);
-      for (let i = 0; i < arrow.length; i++) {
-        const p = parts[Math.min(parts.length - 1, Math.floor(i * step))];
-        p.arrow = true;
-        p.ax = arrow[i][0];
-        p.ay = arrow[i][1];
+    }
+
+    /**
+     * lay the network out in layers across the screen, like a diagram of a
+     * neural net but loosened up. each slot is claimed by the scattered dot
+     * whose logo position is nearest, and that dot's scatter path is bent so
+     * it lands exactly in the slot. connections run between adjacent layers.
+     */
+    function buildNetwork() {
+      const small = W < 600;
+      const { S, cx, cy } = logoFrame();
+      const counts = small ? [3, 5, 6, 5, 3] : [4, 6, 8, 9, 8, 6, 4];
+      const L = counts.length;
+      const marginX = small ? W * 0.08 : W * 0.05;
+      const top = H * 0.1;
+      const bottom = H * 0.9;
+
+      // slots
+      const slots: Array<{ x: number; y: number; layer: number }> = [];
+      const gapX = (W - marginX * 2) / (L - 1);
+      counts.forEach((n, layer) => {
+        const x0 = marginX + gapX * layer;
+        const gapY = (bottom - top) / n;
+        for (let k = 0; k < n; k++) {
+          slots.push({
+            x: x0 + (Math.random() - 0.5) * gapX * 0.35,
+            y: top + gapY * (k + 0.5) + (Math.random() - 0.5) * gapY * 0.5,
+            layer,
+          });
+        }
+      });
+
+      // claim a dot for each slot, nearest by logo position, and aim it there
+      const used = new Set<number>();
+      nodes = [];
+      for (const slot of slots) {
+        let best = -1;
+        let bestD = Infinity;
+        for (let i = 0; i < parts.length; i++) {
+          if (used.has(i)) continue;
+          const p = parts[i];
+          const d = Math.hypot(cx + p.sx * S - slot.x, cy + p.sy * S - slot.y);
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        }
+        if (best < 0) break;
+        used.add(best);
+        const p = parts[best];
+        const vx = slot.x - (cx + p.sx * S);
+        const vy = slot.y + H * 0.25 - (cy + p.sy * S); // scatter lifts by H/4 at full scroll
+        const len = Math.hypot(vx, vy) || 1;
+        p.dx = vx / len;
+        p.dy = vy / len;
+        p.dist = len / S;
+        nodes.push({ i: best, x: slot.x, y: slot.y, layer: slot.layer, edges: [] });
       }
+
+      // connections: each node reaches 2 or 3 nodes in the next layer,
+      // nearest first with one further reach for variety
+      edges = [];
+      const seen = new Set<string>();
+      const byLayer: number[][] = counts.map(() => []);
+      nodes.forEach((n, idx) => byLayer[n.layer].push(idx));
+      for (let layer = 0; layer < L - 1; layer++) {
+        for (const a of byLayer[layer]) {
+          const next = byLayer[layer + 1]
+            .map((b) => ({ b, d: Math.abs(nodes[b].y - nodes[a].y) }))
+            .sort((p, q) => p.d - q.d);
+          const picks = next.slice(0, 2);
+          if (next.length > 3 && Math.random() < 0.7) picks.push(next[2 + Math.floor(Math.random() * (next.length - 2))]);
+          for (const o of picks) {
+            const key = `${a}:${o.b}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            edges.push({ a, b: o.b, order: 0, w: 0.5 + Math.random() * 0.9 });
+          }
+        }
+        // make sure every node in the next layer has at least one input
+        for (const b of byLayer[layer + 1]) {
+          if (edges.some((e) => e.b === b)) continue;
+          const a = byLayer[layer].reduce((best, cand) =>
+            Math.abs(nodes[cand].y - nodes[b].y) < Math.abs(nodes[best].y - nodes[b].y) ? cand : best,
+          );
+          edges.push({ a, b, order: 0, w: 0.5 + Math.random() * 0.9 });
+        }
+      }
+
+      // growth order: left to right, layer by layer, top to bottom within a layer
+      edges
+        .slice()
+        .sort((e, f) => nodes[e.a].layer - nodes[f.a].layer || nodes[e.a].y - nodes[f.a].y || nodes[e.b].y - nodes[f.b].y)
+        .forEach((e, order) => {
+          e.order = order;
+        });
+      edges.forEach((e, idx) => {
+        nodes[e.a].edges.push(idx);
+        nodes[e.b].edges.push(idx);
+      });
+    }
+
+    function measureDoc() {
+      maxScroll = Math.max(1, document.documentElement.scrollHeight - H);
+      needsDraw = true;
+    }
+
+    function measureColumn() {
+      const page = document.querySelector(".page");
+      if (!page) return;
+      const r = page.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(page).paddingLeft) || 0;
+      colL = r.left + pad;
+      colR = r.right - pad;
     }
 
     function resize() {
@@ -211,6 +286,9 @@ export function DitherBackground() {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       ink = cssColor("--color-accent");
       rebuild();
+      buildNetwork();
+      measureColumn();
+      measureDoc();
       if (reduceMedia.matches) draw(0);
     }
 
@@ -221,34 +299,22 @@ export function DitherBackground() {
       const reduce = reduceMedia.matches;
       const dark = darkMedia.matches;
       const small = W < 600;
-
-      // where the logo sits: large and centred, a touch above the middle
-      const S = Math.min(W, H) * (small ? 0.7 : 0.6);
-      const cx = W / 2 + pointerX * 14;
-      const cy = H * 0.46 + pointerY * 10;
+      const t0 = now * 0.001;
+      const { S, cx: cx0, cy: cy0 } = logoFrame();
+      const cx = cx0 + pointerX * 14;
+      const cy = cy0 + pointerY * 10;
 
       // scatter as the reader scrolls into the story
       const scroll = reduce ? 0 : Math.min(1, window.scrollY / (H * 1.1));
-
-      // gather the dust into an arrow as the reader reaches the end
-      const maxScroll = Math.max(1, document.documentElement.scrollHeight - H);
-      const gatherRange = Math.min(H * 0.9, maxScroll * 0.5);
-      const gather = reduce ? 0 : Math.min(1, Math.max(0, 1 - (maxScroll - window.scrollY) / gatherRange));
-      // the arrow sits low, beside the sign-off, clear of the last photo
-      const A = Math.min(W, H) * (small ? 0.5 : 0.34);
-      const acx = W / 2;
-      const acy = H * (small ? 0.78 : 0.72);
-      const t0 = now * 0.001;
-      const nudge = Math.sin(t0 * 1.4) * 6;
       const baseAlpha = dark ? 0.6 : 0.5;
       const dot = small ? 1.6 : 1.9;
-      const color = `rgb(${ink[0]},${ink[1]},${ink[2]})`;
-      c.fillStyle = color;
+      c.fillStyle = `rgb(${ink[0]},${ink[1]},${ink[2]})`;
 
+      // the logo, and its scatter
       for (let i = 0; i < parts.length; i++) {
         const p = parts[i];
         const t = smooth((scroll - p.delay * 0.6) / 0.6);
-        const g = smooth((gather - p.gdelay * 0.5) / 0.65);
+        if (t >= 1) continue; // gone, or landed in the network
 
         let x = cx + p.sx * S;
         let y = cy + p.sy * S;
@@ -262,22 +328,78 @@ export function DitherBackground() {
 
         if (t > 0) {
           const d = p.dist * S * t;
-          x = lerp(x, x + p.dx * d, 1);
-          y = lerp(y, y + p.dy * d - scroll * H * 0.25, 1);
-        }
-
-        if (g > 0 && p.arrow) {
-          x = lerp(x, acx + p.ax * A + nudge * g, g);
-          y = lerp(y, acy + p.ay * A, g);
+          x += p.dx * d;
+          y += p.dy * d - scroll * H * 0.25;
         }
 
         const shimmer = reduce ? 1 : 0.78 + 0.22 * Math.sin(t0 * 1.6 * p.speed + p.phase * 3);
-        const scattered = baseAlpha * shimmer * (1 - t * 0.9);
-        const alpha = p.arrow ? lerp(scattered, baseAlpha * shimmer, g) : scattered * (1 - g);
+        const alpha = baseAlpha * shimmer * (1 - t);
         if (alpha < 0.01) continue;
         c.globalAlpha = alpha;
-        const size = lerp(dot * (1 + t * 0.6), dot, g);
+        const size = dot * (1 + t * 0.6);
         c.fillRect(x, y, size, size);
+      }
+
+      // the network: grows from the end of the scatter, complete near the end
+      if (!edges.length || scroll <= 0) {
+        c.globalAlpha = 1;
+        return;
+      }
+      const netSpan = Math.max(1, (maxScroll - H * 1.1) * 0.92);
+      const net = Math.min(1, Math.max(0, (window.scrollY - H * 1.1) / netSpan));
+      const head = net * edges.length;
+
+      const settle = reduce ? 0 : 1 - scroll; // wander fades as the logo scatters
+      const pos = nodes.map((n) => {
+        const p = parts[n.i];
+        const w = t0 * p.speed;
+        return {
+          x: n.x + pointerX * 14 + Math.sin(w + p.phase) * 1.4 * settle,
+          y: n.y + pointerY * 10 + Math.cos(w * 0.8 + p.phase) * 1.4 * settle,
+        };
+      });
+      const local = edges.map((e) => smooth((head - e.order) / 5));
+      const lineAlpha = dark ? 0.2 : 0.14;
+      const nodeAlpha = dark ? 0.5 : 0.4;
+      const underText = 0.5; // extra dimming behind the column
+
+      c.strokeStyle = `rgb(${ink[0]},${ink[1]},${ink[2]})`;
+      c.lineCap = "round";
+      for (let k = 0; k < edges.length; k++) {
+        const l = local[k];
+        if (l <= 0) continue;
+        const e = edges[k];
+        const a = pos[e.a];
+        const b = pos[e.b];
+        const mx = (a.x + b.x) / 2;
+        const dim = mx > colL && mx < colR ? underText : 1;
+        c.globalAlpha = lineAlpha * l * dim * (0.6 + e.w * 0.4);
+        c.lineWidth = e.w;
+        c.beginPath();
+        c.moveTo(a.x, a.y);
+        c.lineTo(a.x + (b.x - a.x) * l, a.y + (b.y - a.y) * l);
+        c.stroke();
+      }
+
+      for (let k = 0; k < nodes.length; k++) {
+        const n = nodes[k];
+        const arrival = smooth((scroll - parts[n.i].delay * 0.6) / 0.6);
+        if (arrival <= 0) continue;
+        let lit = 0;
+        for (const ei of n.edges) if (local[ei] > lit) lit = local[ei];
+        const { x, y } = pos[k];
+        const dim = x > colL && x < colR ? underText : 1;
+        const size = dot * 1.5 + lit * 1.5;
+        c.globalAlpha = nodeAlpha * (0.5 + 0.5 * lit) * arrival * dim;
+        c.fillRect(x - size / 2, y - size / 2, size, size);
+        if (lit > 0) {
+          // a faint ring once the node is wired in
+          c.globalAlpha = nodeAlpha * 0.35 * lit * dim;
+          c.lineWidth = 1;
+          c.beginPath();
+          c.arc(x, y, size * 1.6, 0, Math.PI * 2);
+          c.stroke();
+        }
       }
       c.globalAlpha = 1;
     }
@@ -286,7 +408,16 @@ export function DitherBackground() {
       if (!running) return;
       pointerX += (targetPX - pointerX) * 0.05;
       pointerY += (targetPY - pointerY) * 0.05;
-      draw(now);
+      // only repaint when something can have changed: the logo is still on
+      // screen and breathing, the pointer is settling, or the page scrolled
+      const sy = window.scrollY;
+      const logoOnScreen = sy < H * 1.2;
+      const pointerMoving = Math.abs(targetPX - pointerX) > 0.0005 || Math.abs(targetPY - pointerY) > 0.0005;
+      if (needsDraw || logoOnScreen || pointerMoving || sy !== lastScroll) {
+        draw(now);
+        lastScroll = sy;
+        needsDraw = false;
+      }
       raf = requestAnimationFrame(frame);
     }
 
@@ -307,8 +438,13 @@ export function DitherBackground() {
 
     function onTheme() {
       ink = cssColor("--color-accent");
+      needsDraw = true;
       if (reduceMedia.matches) draw(0);
     }
+
+    // the page grows as photos load in; keep the cached height current
+    const docObserver = new ResizeObserver(() => measureDoc());
+    docObserver.observe(document.body);
 
     const image = new Image();
     image.src = LOGO_SRC;
@@ -335,6 +471,7 @@ export function DitherBackground() {
       window.removeEventListener("pointermove", onPointer);
       document.removeEventListener("visibilitychange", onVisibility);
       darkMedia.removeEventListener("change", onTheme);
+      docObserver.disconnect();
     };
   }, []);
 

@@ -24,14 +24,14 @@
   --line-height-body: 1.55;
   --paragraph-gap: 1.4em;
   --section-gap: 4.5rem;
-  --top-space: 30vh;
+  --top-space: 72vh;
 }
 
 @media (max-width: 600px) {
   :root {
     --font-size-body: 17px;
     --section-gap: 3.5rem;
-    --top-space: 22vh;
+    --top-space: 60vh;
   }
 }
 

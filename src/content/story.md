@@ -116,7 +116,7 @@ the rug.
 
 thank you.
 
-![the thank you tee](/images/thank-you-tee.jpg)
+![the thank you tee](/images/thank-you-tee.png)
 
 ---
 
